@@ -1,0 +1,21 @@
+{
+  "name": "Memoria - Juego de Cartas",
+  "short_name": "Memoria",
+  "description": "Juego de memoria de cartas instalable. Encuentra las parejas de cartas lo más rápido posible.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"],
+  "lang": "es"
+}

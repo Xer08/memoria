@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="description" content="Juego de memoria PWA - Encuentra las parejas de cartas">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Memoria - Juego de Cartas</title>
+    
+    <!-- Enlace al Service Worker -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Pantalla de inicio / Menú de selección de dificultad -->
+    <div id="menu-screen" class="screen active">
+        <div class="container">
+            <h1 class="game-title">🎴 Memoria</h1>
+            <p class="subtitle">Encuentra todas las parejas</p>
+            
+            <div class="difficulty-buttons">
+                <button class="difficulty-btn easy" data-difficulty="easy">
+                    <span class="difficulty-icon">🌟</span>
+                    <span class="difficulty-name">Fácil</span>
+                    <span class="difficulty-cards">5 parejas</span>
+                </button>
+                
+                <button class="difficulty-btn medium" data-difficulty="medium">
+                    <span class="difficulty-icon">⭐</span>
+                    <span class="difficulty-name">Intermedio</span>
+                    <span class="difficulty-cards">10 parejas</span>
+                </button>
+                
+                <button class="difficulty-btn hard" data-difficulty="hard">
+                    <span class="difficulty-icon">🔥</span>
+                    <span class="difficulty-name">Difícil</span>
+                    <span class="difficulty-cards">20 parejas</span>
+                </button>
+                
+                <button class="difficulty-btn timetrial" data-difficulty="timetrial">
+                    <span class="difficulty-icon">⏱️</span>
+                    <span class="difficulty-name">Contrareloj</span>
+                    <span class="difficulty-cards">1 minuto</span>
+                </button>
+            </div>
+            
+            <!-- Sección de récords -->
+            <div class="records-section">
+                <h2>🏆 Récords</h2>
+                <div class="record-item">
+                    <span class="record-label">Fácil:</span>
+                    <span class="record-time" id="record-easy">--:--</span>
+                </div>
+                <div class="record-item">
+                    <span class="record-label">Intermedio:</span>
+                    <span class="record-time" id="record-medium">--:--</span>
+                </div>
+                <div class="record-item">
+                    <span class="record-label">Difícil:</span>
+                    <span class="record-time" id="record-hard">--:--</span>
+                </div>
+                <div class="record-item">
+                    <span class="record-label">Contrareloj:</span>
+                    <span class="record-time" id="record-timetrial">0 pts</span>
+                </div>
+            </div>
+            
+            <!-- Opción de configuración bloqueada -->
+            <button class="settings-btn" id="settings-btn">⚙️ Configuración</button>
+        </div>
+    </div>
+    
+    <!-- Modal de contraseña -->
+    <div id="password-modal" class="modal">
+        <div class="modal-content">
+            <h2>🔐 Configuración</h2>
+            <p>Ingresa la contraseña para acceder:</p>
+            <input type="password" id="password-input" class="modal-input" placeholder="Contraseña" maxlength="4">
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" id="password-cancel">Cancelar</button>
+                <button class="modal-btn confirm" id="password-confirm">Acceder</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de configuración de vidas -->
+    <div id="lives-modal" class="modal">
+        <div class="modal-content">
+            <h2>❤️ Configurar Vidas</h2>
+            <p>Selecciona el número de vidas para las partidas:</p>
+            <div class="lives-selector">
+                <button class="lives-btn" data-lives="1">1</button>
+                <button class="lives-btn" data-lives="2">2</button>
+                <button class="lives-btn" data-lives="3">3</button>
+                <button class="lives-btn" data-lives="4">4</button>
+                <button class="lives-btn" data-lives="5">5</button>
+                <button class="lives-btn" data-lives="6">6</button>
+                <button class="lives-btn" data-lives="7">7</button>
+                <button class="lives-btn" data-lives="8">8</button>
+                <button class="lives-btn" data-lives="9">9</button>
+            </div>
+            <p class="current-lives">Vidas actuales: <span id="current-lives-display">5</span></p>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" id="lives-cancel">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de juego -->
+    <div id="game-screen" class="screen">
+        <div class="game-header">
+            <button class="back-btn" id="back-btn">← Volver</button>
+            <div class="game-stats">
+                <div class="stat">
+                    <span class="stat-label">⏱️ Tiempo:</span>
+                    <span class="stat-value" id="timer">00:00</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">❤️ Vidas:</span>
+                    <span class="stat-value" id="lives">5</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="game-board" id="game-board">
+            <!-- Las cartas se generarán dinámicamente con JavaScript -->
+        </div>
+    </div>
+
+    <!-- Pantalla de Game Over -->
+    <div id="gameover-screen" class="screen">
+        <div class="container">
+            <h1 class="game-over-title">💔 Juego Terminado</h1>
+            <p class="game-over-message">Te quedaste sin vidas</p>
+            <button class="action-btn" id="gameover-restart">Intentar de nuevo</button>
+            <button class="action-btn secondary" id="gameover-menu">Volver al menú</button>
+        </div>
+    </div>
+
+    <!-- Pantalla de Victoria -->
+    <div id="victory-screen" class="screen">
+        <div class="container">
+            <h1 class="victory-title">🎉 ¡Victoria!</h1>
+            <p class="victory-message">¡Encontraste todas las parejas!</p>
+            <div class="victory-stats">
+                <div class="victory-stat">
+                    <span class="victory-stat-label">Tiempo:</span>
+                    <span class="victory-stat-value" id="victory-time">00:00</span>
+                </div>
+                <div class="victory-stat">
+                    <span class="victory-stat-label">Récord:</span>
+                    <span class="victory-stat-value" id="victory-record">No</span>
+                </div>
+            </div>
+            <button class="action-btn" id="victory-restart">Jugar de nuevo</button>
+            <button class="action-btn secondary" id="victory-menu">Volver al menú</button>
+        </div>
+    </div>
+
+    <!-- Pantalla de resultados de Contrareloj -->
+    <div id="timetrial-screen" class="screen">
+        <div class="container">
+            <h1 class="victory-title">⏱️ ¡Tiempo Agotado!</h1>
+            <p class="victory-message">Modo Contrareloj</p>
+            <div class="victory-stats">
+                <div class="victory-stat">
+                    <span class="victory-stat-label">Parejas encontradas:</span>
+                    <span class="victory-stat-value" id="timetrial-score">0</span>
+                </div>
+                <div class="victory-stat">
+                    <span class="victory-stat-label">Récord:</span>
+                    <span class="victory-stat-value" id="timetrial-record">No</span>
+                </div>
+            </div>
+            <button class="action-btn" id="timetrial-restart">Jugar de nuevo</button>
+            <button class="action-btn secondary" id="timetrial-menu">Volver al menú</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
