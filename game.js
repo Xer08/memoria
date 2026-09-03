@@ -486,11 +486,20 @@ function registerServiceWorker() {
     // Verificamos si el navegador soporta Service Workers
     if ('serviceWorker' in navigator) {
         console.log('📡 Registrando Service Worker...');
-        
+
         // Registramos el archivo sw.js
-        navigator.serviceWorker.register('sw.js')
+        navigator.serviceWorker.register('./sw.js')
             .then(registration => {
                 console.log('✅ Service Worker registrado:', registration.scope);
+
+                // Comprobar si existe una versión nueva del Service Worker
+                registration.update()
+                    .then(() => {
+                        console.log('🔄 Comprobación de actualización del Service Worker completada');
+                    })
+                    .catch(error => {
+                        console.warn('⚠️ No se pudo comprobar la actualización del Service Worker:', error);
+                    });
             })
             .catch(error => {
                 console.error('❌ Error al registrar Service Worker:', error);
