@@ -1,283 +1,306 @@
-// ============================================
-// SERVICE WORKER - CACHE FIRST STRATEGY
-// ============================================
-// Este Service Worker implementa una estrategia de "Cache First"
-// para garantizar que el juego funcione 100% sin conexión a internet.
-//
-// ¿CÓMO FUNCIONA EL SERVICE WORKER?
-// ============================================
-// Un Service Worker es un script que el navegador ejecuta en segundo plano,
-// separado de la página web. Actúa como un proxy de red interceptando
-// las peticiones HTTP que hace la aplicación.
-//
-// CICLO DE VIDA DEL SERVICE WORKER:
-// 1. INSTALL: El Service Worker se descarga y se instala
-// 2. ACTIVATE: El Service Worker se activa y toma el control
-// 3. FETCH: Intercepta todas las peticiones de red de la aplicación
-//
-// ESTRATEGIA CACHE FIRST:
-// ========================
-// Esta estrategia prioriza el cache sobre la red:
-// 1. Cuando se solicita un recurso, primero buscamos en el cache
-// 2. Si el recurso está en cache, lo retornamos inmediatamente (muy rápido)
-// 3. Si no está en cache, lo buscamos en la red
-// 4. Si lo encontramos en la red, lo guardamos en cache para futuras peticiones
-// 5. Si no está en la red ni en cache, retornamos un error
-//
-// VENTAJAS DE CACHE FIRST:
-// - Carga instantánea de recursos ya cacheados
-// - Funciona sin conexión a internet (offline-first)
-// - Reduce el consumo de datos móviles
-// - Mejora el rendimiento general de la aplicación
-//
-// DESVENTAJAS:
-// - Los usuarios podrían ver contenido antiguo si no hay conexión
-// - Requiere actualización manual del cache para ver cambios nuevos
+```javascript
+const CACHE_NAME = 'memoria-game-v2';
 
-// ============================================
-// CONFIGURACIÓN DEL CACHE
-// ============================================
-
-// Nombre del cache - Usamos versión para forzar actualizaciones
-const CACHE_NAME = 'memoria-game-v1';
-
-// Lista de recursos a cachear durante la instalación
-// Estos son todos los archivos necesarios para que el juego funcione offline
-const ASSETS_TO_CACHE = [
-    './',                    // Directorio raíz
-    './index.html',          // Página principal
-    './styles.css',          // Hoja de estilos
-    './game.js',             // Lógica del juego
-    './manifest.json',       // Manifest de la PWA
-    './icon.png'             // Icono de la aplicación
+const APP_SHELL = [
+  './',
+  './index.html',
+  './styles.css',
+  './game.js',
+  './manifest.json',
+  './icon.png'
 ];
 
-// ============================================
-// EVENTO: INSTALL
-// ============================================
-// Este evento se dispara cuando el Service Worker se instala por primera vez.
-// Aquí pre-cachemos todos los recursos necesarios para el juego.
+// ============================================================
+// INSTALACIÓN DEL SERVICE WORKER
+// ============================================================
+// Este evento se ejecuta cuando el navegador instala una nueva
+// versión del Service Worker.
 //
-// ¿POR QUÉ PRE-CACHEAR?
-// Cuando el Service Worker se instala, aprovechamos para descargar todos
-// los archivos necesarios y guardarlos en el cache. Así, cuando el usuario
-// abra la aplicación sin internet, todos los archivos ya estarán disponibles.
-self.addEventListener('install', (event) => {
-    console.log('📦 Service Worker: Instalando...');
-    
-    // waitUntil() le dice al navegador que espere a que el cache se complete
-    // antes de considerar la instalación como exitosa
-    event.waitUntil(
-        // Abrimos el cache con el nombre especificado
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log('📦 Service Worker: Cache abierto, añadiendo archivos...');
-                
-                // Añadimos todos los archivos al cache
-                // addAll() intenta descargar todos los recursos y falla si alguno no se puede descargar
-                return cache.addAll(ASSETS_TO_CACHE);
-            })
-            .then(() => {
-                console.log('✅ Service Worker: Todos los archivos cacheados correctamente');
-                
-                // skipWaiting() fuerza al Service Worker a activarse inmediatamente
-                // en lugar de esperar a que todas las pestañas se cierren
-                return self.skipWaiting();
-            })
-            .catch((error) => {
-                console.error('❌ Service Worker: Error durante la instalación:', error);
-            })
-    );
+// Abrimos la caché "memoria-game-v2" y guardamos en ella los
+// archivos principales de la aplicación.
+//
+// self.skipWaiting() indica que queremos que la nueva versión
+// del Service Worker pase a la fase "activated" cuanto antes,
+// sin esperar a que desaparezcan todas las pestañas antiguas.
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
 });
 
-// ============================================
-// EVENTO: ACTIVATE
-// ============================================
-// Este evento se dispara cuando el Service Worker se activa.
-// Aquí limpiamos caches antiguos para no ocupar espacio innecesario.
+
+// ============================================================
+// ACTIVACIÓN DEL SERVICE WORKER
+// ============================================================
+// Este evento se ejecuta cuando el nuevo Service Worker pasa
+// a estar activo.
 //
-// ¿POR QUÉ LIMPIAR CACHES ANTIGUOS?
-// Cada vez que actualizamos la versión del cache (CACHE_NAME),
-// los caches antiguos quedan obsoletos. Los eliminamos para:
-// 1. No ocupar espacio de almacenamiento del usuario
-// 2. Evitar conflictos con versiones antiguas de archivos
-// 3. Garantizar que siempre se use la versión más reciente
-self.addEventListener('activate', (event) => {
-    console.log('🚀 Service Worker: Activando...');
-    
-    event.waitUntil(
-        // Obtenemos todos los nombres de caches existentes
-        caches.keys()
-            .then((cacheNames) => {
-                console.log('🔍 Service Worker: Limpiando caches antiguos...');
-                
-                // Filtramos para encontrar caches que no coinciden con el nombre actual
-                return Promise.all(
-                    cacheNames.map((cacheName) => {
-                        // Si el nombre del cache no coincide con el actual, lo eliminamos
-                        if (cacheName !== CACHE_NAME) {
-                            console.log('🗑️ Service Worker: Eliminando cache antiguo:', cacheName);
-                            return caches.delete(cacheName);
-                        }
-                    })
-                );
-            })
-            .then(() => {
-                console.log('✅ Service Worker: Caches antiguos eliminados');
-                
-                // claim() le dice al Service Worker que tome el control
-                // inmediatamente de todas las páginas bajo su scope
-                return self.clients.claim();
-            })
-            .catch((error) => {
-                console.error('❌ Service Worker: Error durante la activación:', error);
-            })
-    );
+// Primero obtenemos todos los nombres de caché existentes.
+// Después eliminamos cualquier caché que NO corresponda a la
+// versión actual.
+//
+// Esto es importante porque anteriormente utilizábamos:
+//     memoria-game-v1
+//
+// Y ahora utilizamos:
+//     memoria-game-v2
+//
+// Finalmente, self.clients.claim() hace que el nuevo Service
+// Worker pueda controlar inmediatamente las páginas abiertas.
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys =>
+        Promise.all(
+          keys
+            .filter(key => key !== CACHE_NAME)
+            .map(key => caches.delete(key))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
 });
 
-// ============================================
-// EVENTO: FETCH
-// ============================================
-// Este evento se dispara cada vez que la aplicación hace una petición de red.
-// Aquí implementamos la estrategia "Cache First".
-//
-// FLUJO DE CACHE FIRST:
-// 1. El navegador solicita un recurso (ej: index.html, styles.css)
-// 2. El Service Worker intercepta la petición
-// 3. Primero buscamos el recurso en el cache
-// 4. Si está en cache → Lo retornamos (respuesta rápida, sin red)
-// 5. Si no está en cache → Lo buscamos en la red
-// 6. Si está en red → Lo guardamos en cache y lo retornamos
-// 7. Si no está en red → Retornamos error offline
-//
-// ¿POR QUÉ ESTA ESTRATEGIA PARA UN JUEGO?
-// - Los archivos del juego (HTML, CSS, JS) no cambian frecuentemente
-// - Priorizamos la velocidad de carga sobre tener la última versión
-// - Queremos que el juego funcione sin conexión
-// - El usuario prefiere jugar rápido aunque sea una versión ligeramente antigua
-self.addEventListener('fetch', (event) => {
-    console.log('🌐 Service Worker: Interceptando petición:', event.request.url);
-    
-    // respondWith() nos permite proporcionar una respuesta personalizada
-    // en lugar de dejar que el navegador maneje la petición normalmente
-    event.respondWith(
-        // Primero buscamos en el cache
-        caches.match(event.request)
-            .then((cachedResponse) => {
-                // Si encontramos el recurso en cache
-                if (cachedResponse) {
-                    console.log('✅ Service Worker: Recurso encontrado en cache:', event.request.url);
-                    
-                    // Retornamos la respuesta del cache inmediatamente
-                    // Esto es muy rápido porque no hay espera de red
-                    return cachedResponse;
-                }
-                
-                // Si no está en cache, buscamos en la red
-                console.log('🌐 Service Worker: Recurso no en cache, buscando en red:', event.request.url);
-                
-                // Hacemos la petición a la red
-                return fetch(event.request)
-                    .then((networkResponse) => {
-                        // Verificamos que la respuesta sea válida
-                        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-                            console.log('⚠️ Service Worker: Respuesta de red no válida, retornando sin cachear');
-                            return networkResponse;
-                        }
-                        
-                        // Clonamos la respuesta porque las respuestas solo pueden usarse una vez
-                        // Una para el usuario, otra para el cache
-                        const responseToCache = networkResponse.clone();
-                        
-                        // Abrimos el cache y guardamos la respuesta
-                        caches.open(CACHE_NAME)
-                            .then((cache) => {
-                                console.log('💾 Service Worker: Guardando en cache:', event.request.url);
-                                cache.put(event.request, responseToCache);
-                            });
-                        
-                        // Retornamos la respuesta de la red al usuario
-                        return networkResponse;
-                    })
-                    .catch((error) => {
-                        console.error('❌ Service Worker: Error de red:', error);
-                        
-                        // Si estamos offline y el recurso no está en cache
-                        // podríamos retornar una página de error offline personalizada
-                        // Para este juego simple, retornamos el error
-                        throw error;
-                    });
-            })
-            .catch((error) => {
-                console.error('❌ Service Worker: Error general en fetch:', error);
-                throw error;
-            })
-    );
-});
 
-// ============================================
-// EVENTO: MESSAGE
-// ============================================
-// Este evento permite comunicación entre la aplicación y el Service Worker.
-// Útil para acciones manuales como limpiar el cache o forzar actualizaciones.
+// ============================================================
+// INTERCEPTAR PETICIONES DE RED
+// ============================================================
+// El evento "fetch" se ejecuta cada vez que la aplicación
+// solicita un recurso mediante HTTP.
 //
-// ¿CÓMO USAR ESTE EVENTO?
-// Desde la aplicación podemos enviar mensajes al Service Worker:
-// navigator.serviceWorker.controller.postMessage({
-//   action: 'skipWaiting'
-// });
-self.addEventListener('message', (event) => {
-    console.log('📨 Service Worker: Mensaje recibido:', event.data);
-    
-    if (event.data && event.data.action === 'skipWaiting') {
-        console.log('⏭️ Service Worker: Saltando espera...');
-        self.skipWaiting();
-    }
-    
-    if (event.data && event.data.action === 'clearCache') {
-        console.log('🗑️ Service Worker: Limpiando cache...');
-        caches.delete(CACHE_NAME).then(() => {
-            console.log('✅ Service Worker: Cache eliminado');
+// Ejemplos:
+//     index.html
+//     styles.css
+//     game.js
+//     manifest.json
+//     icon.png
+//
+// La estrategia utilizada aquí es:
+//
+//     NETWORK FIRST
+//
+// Es decir:
+//
+// 1. Intentamos obtener siempre la versión más reciente desde
+//    Internet.
+//
+// 2. Si la petición funciona, guardamos esa versión en caché.
+//
+// 3. Si no hay Internet, utilizamos la copia almacenada.
+//
+// De esta manera conseguimos dos cosas:
+//
+//     ONLINE  -> versión actualizada
+//     OFFLINE -> versión guardada
+self.addEventListener('fetch', event => {
+  const request = event.request;
+
+
+  // ----------------------------------------------------------
+  // Solo procesamos peticiones GET.
+  // ----------------------------------------------------------
+  // Las peticiones POST, PUT, DELETE, etc. no son interceptadas
+  // por este Service Worker.
+  if (request.method !== 'GET') return;
+
+
+  // ----------------------------------------------------------
+  // Obtenemos información sobre la URL solicitada.
+  // ----------------------------------------------------------
+  const url = new URL(request.url);
+
+
+  // ----------------------------------------------------------
+  // Solo interceptamos recursos del mismo dominio/origen.
+  // ----------------------------------------------------------
+  // Esto evita que nuestro Service Worker intente controlar
+  // recursos externos, por ejemplo:
+  //
+  //     https://otro-sitio.com/archivo.js
+  //
+  // Solo trabajamos con los archivos pertenecientes a nuestra
+  // aplicación.
+  if (url.origin !== self.location.origin) return;
+
+
+  // ----------------------------------------------------------
+  // respondWith()
+  // ----------------------------------------------------------
+  // Le indicamos al navegador que nosotros vamos a decidir qué
+  // respuesta devolver para esta petición.
+  event.respondWith(
+
+    // ========================================================
+    // PRIMER INTENTO: INTERNET
+    // ========================================================
+    // "cache: no-cache" obliga al navegador a comprobar si existe
+    // una versión más reciente del recurso.
+    fetch(request, { cache: 'no-cache' })
+
+      .then(response => {
+
+        // ----------------------------------------------------
+        // Si la respuesta es correcta, la guardamos en caché.
+        // ----------------------------------------------------
+        //
+        // response es un objeto que solo puede consumirse una
+        // vez. Por eso hacemos una copia con clone().
+        //
+        // La respuesta original se devuelve al navegador y la
+        // copia se guarda en la caché.
+        if (response && response.ok) {
+
+          const responseClone = response.clone();
+
+
+          // --------------------------------------------------
+          // event.waitUntil()
+          // --------------------------------------------------
+          // Le decimos al navegador que espere a que termine
+          // la operación de actualización de la caché.
+          event.waitUntil(
+            caches.open(CACHE_NAME)
+              .then(cache => cache.put(request, responseClone))
+          );
+        }
+
+
+        // ----------------------------------------------------
+        // Devolvemos al navegador la versión obtenida de red.
+        // ----------------------------------------------------
+        return response;
+      })
+
+
+      // ======================================================
+      // SEGUNDO INTENTO: CACHÉ
+      // ======================================================
+      // Si fetch() falla, normalmente significa que no tenemos
+      // conexión a Internet.
+      //
+      // En ese caso buscamos el recurso en nuestra caché.
+      .catch(() => {
+
+        return caches.match(request).then(cachedResponse => {
+
+          // --------------------------------------------------
+          // Si encontramos el archivo en caché, lo devolvemos.
+          // --------------------------------------------------
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+
+          // --------------------------------------------------
+          // ÚLTIMO RECURSO PARA LAS NAVEGACIONES
+          // --------------------------------------------------
+          // Si el usuario está intentando abrir una página y
+          // esa página no está disponible directamente, usamos
+          // index.html como página de respaldo.
+          if (request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+
+
+          // --------------------------------------------------
+          // Si tampoco tenemos el recurso almacenado, devolvemos
+          // un error HTTP 503 indicando que no está disponible
+          // sin conexión.
+          // --------------------------------------------------
+          return new Response(
+            'Recurso no disponible sin conexión.',
+            {
+              status: 503,
+              statusText: 'Service Unavailable',
+
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8'
+              }
+            }
+          );
         });
-    }
+      })
+  );
 });
 
-// ============================================
-// FIN DEL SERVICE WORKER
-// ============================================
+
+// ============================================================
+// COMUNICACIÓN ENTRE LA PÁGINA Y EL SERVICE WORKER
+// ============================================================
+// El Service Worker puede recibir mensajes enviados desde
+// JavaScript mediante:
 //
-// RESUMEN DEL FUNCIONAMIENTO OFFLINE:
-// ============================================
-// 1. INSTALACIÓN: El Service Worker descarga y cachea todos los archivos
-// 2. ACTIVACIÓN: El Service Worker toma control de la aplicación
-// 3. PETICIONES: Cada petición se maneja con estrategia Cache First
-// 4. OFFLINE: Si no hay red, los archivos se sirven desde cache
-// 5. ONLINE: Si hay red, los archivos se actualizan en cache
+//     navigator.serviceWorker.controller.postMessage(...)
 //
-// ESTADO DE PETICIONES SIN INTERNET:
-// ============================================
-// Cuando el dispositivo no tiene conexión a internet:
+// En nuestro caso soportamos dos mensajes:
 //
-// - El Service Worker sigue interceptando las peticiones
-// - caches.match() busca en el cache local
-// - Si el recurso está cacheado → Se sirve inmediatamente
-// - Si no está cacheado → fetch() falla (sin conexión)
-// - La aplicación sigue funcionando con recursos cacheados
+//     skipWaiting
+//     clearCache
+self.addEventListener('message', event => {
+
+  // Si no recibimos ningún dato, no hacemos nada.
+  if (!event.data) return;
+
+
+  // ----------------------------------------------------------
+  // FORZAR ACTIVACIÓN
+  // ----------------------------------------------------------
+  // Permite pedirle al Service Worker que se active
+  // inmediatamente.
+  if (event.data.type === 'skipWaiting') {
+    self.skipWaiting();
+  }
+
+
+  // ----------------------------------------------------------
+  // LIMPIAR TODA LA CACHÉ
+  // ----------------------------------------------------------
+  // Borra todas las cachés disponibles.
+  //
+  // Esto puede resultar útil durante pruebas o cuando queremos
+  // forzar una limpieza completa de los archivos almacenados.
+  if (event.data.type === 'clearCache') {
+
+    event.waitUntil(
+      caches.keys().then(keys =>
+        Promise.all(
+          keys.map(key => caches.delete(key))
+        )
+      )
+    );
+  }
+});
+
+
+// ============================================================
+// MANEJO DE ERRORES
+// ============================================================
+// Estos eventos no son necesarios para que el Service Worker
+// funcione, pero ayudan durante el desarrollo y la depuración.
 //
-// Para este juego de memoria:
-// - index.html, styles.css, game.js están siempre cacheados
-// - El usuario puede jugar sin conexión
-// - Los récords se guardan en localStorage (funciona offline)
-// - La única limitación es que no se pueden actualizar archivos
-//
-// ACTUALIZACIÓN DEL CACHE:
-// ============================================
-// Para actualizar los archivos cacheados:
-// 1. Cambiar CACHE_NAME (ej: 'memoria-game-v2')
-// 2. El nuevo Service Worker se instala con nuevo cache
-// 3. El evento activate elimina el cache antiguo
-// 4. Los usuarios obtienen la nueva versión
-//
-// Esto garantiza que los usuarios siempre tengan la versión más reciente
-// cuando tengan conexión, pero puedan seguir jugando offline con la versión
-// que tengan cacheada.
+// Si ocurre un error JavaScript dentro del Service Worker,
+// aparecerá información en la consola del navegador.
+self.addEventListener('error', event => {
+
+  console.error(
+    '[Memoria SW] Error:',
+    event.error || event.message
+  );
+});
+
+
+// ============================================================
+// PROMESAS RECHAZADAS
+// ============================================================
+// Captura promesas que hayan fallado y no hayan sido manejadas
+// correctamente.
+self.addEventListener('unhandledrejection', event => {
+
+  console.error(
+    '[Memoria SW] Promesa rechazada:',
+    event.reason
+  );
+});
+```
